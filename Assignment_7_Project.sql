@@ -60,8 +60,13 @@ VALUES
 (104, 'Deluxe', 2500, 1),
 (105, 'Economy', 800, 0);
 
+update Rooms2008
+set status = 1
+where RoomId = 105;
 
 select * from Rooms2008;
+
+insert into rooms2008 values(106,'single',1500,0);
 
 INSERT INTO booking2008 (BookingID, CustomerID, roomid, checkInDate, checkOutDate, TotalAmount)
 VALUES 
@@ -76,6 +81,12 @@ INSERT INTO booking2008 (BookingID, CustomerID, roomid, checkInDate, checkOutDat
 VALUES 
 (16, 1, 102, '2025-02-20', '2025-02-23', 8500),
 (17, 2, 101, '2025-02-20', '2025-02-23', 4900);
+
+
+
+select * from booking2008;
+
+alter table booking2008 add status varchar(30);
 
 INSERT INTO Payment2008 (paymentId, BookingID, paymentDate, Amount, PaymentMethod)
 VALUES 
@@ -145,10 +156,21 @@ where status = 0
 
 ---task 3
 --task3.1
+/*
+SELECT b.CustomerID, COUNT(b.CustomerID) AS BookingCount
+FROM booking2008 AS b
+JOIN customer2008 AS c ON b.CustomerID = c.CustomerID
+GROUP BY b.CustomerID
+HAVING COUNT(b.CustomerID) > 1;
+*/
 
-select * from booking2008 as b
-join customer2008 as c on b.CustomerID = c.CustomerID
-having count( c.CustomerID)>1;
+select * from customer2008 
+where CustomerID in(
+select CustomerID from booking2008
+group by CustomerID
+having count(CustomerID)>1
+);
+
 
 --task 3.2
 
@@ -190,13 +212,13 @@ exec TotalRevenu2008 2;
 --Task 6.2
 
 create function fn_TotalDays2008()
-returns int
-as
-begin
-	declare @TotalDay int
-	select @TotalDay = day(checkInDate) - day(checkOutDate) from booking2008;
-	return @TotalDay
-end;
+returns table
+as	
+return (select (day(checkOutDate) - day(checkInDate)) as Booking_Days from booking2008);
+
+
+DROP FUNCTION fn_TotalDays2008;
+
 
 select * from dbo.fn_TotalDays2008();
 
@@ -204,20 +226,49 @@ select * from dbo.fn_TotalDays2008();
 ---Task 7
 
 create trigger UpdateRoomStatus2009 on booking2008
-for delete
+INSTEAD of delete
 as 
 begin
 	declare @bookingId int
 	declare @roomID int
-	select @bookingId = bookingID from inserted;
+	select @bookingId = bookingID from deleted;
 	select @roomID = roomid from booking2008 where bookingid = @bookingId;
 	update rooms2008
-	set status = 1
+	set status = 0
 	where roomid = @roomId ;
 end;
 
-delete from booking2008
+drop trigger UpdateRoomStatus2009;
+
+alter table booking2008 drop column service;
+
+delete from booking2008 where bookingid = 11;
+
+select * from booking2008;
+
+select * from rooms2008;
+
+
+drop trigger UpdateRoomStatus2009;
+
+create trigger deleateStatusOnRoom on booking2008
+after insert
+as 
+begin
+	update rooms2008
+	set status = 1
+	where roomid = (select roomid from inserted);
+end;
+
+alter table booking2008 add status varchar(30);
+
+select * from booking2008;
+
+update booking2008
+set status = 'non-avilable'
 where bookingid = 13;
+
+DROP TRIGGER UpdateRoomStatus2009;
 
 select * from booking2008;
 select * from rooms2008;
@@ -226,6 +277,60 @@ select * from rooms2008;
 create role HotalManager;
 grant select, insert update,delete on booking2008 to HotalManager;
 grant select , insert, update on Payment2008 to hotalMnager;
+
+--Task 9
+
+CREATE FULLTEXT CATALOG SearchBYLocation;
+
+CREATE FULLTEXT INDEX ON HotelBranch2008
+(
+    Location
+)
+KEY INDEX UK_BranchId
+ON SearchBYLocation;
+
+CREATE UNIQUE INDEX UK_BranchId ON HotelBranch2008(BranchId);
+
+alter table HotelBranch2008 alter column BranchId int not null;
+
+select * from HotelBranch2008;
+
+SELECT name, is_default
+FROM sys.fulltext_catalogs;
+
+
+select * from HotelBranch2008
+where contains(Location, 'mumbai');
+
+select * from HotelBranch2008
+where FREETEXT(Location, 'mumbai');
+
  
+
+ -----------------------------------------------------
+select * from booking2008;
+
+create trigger ServicePriceAdd on BookingService2008
+after insert
+as 
+begin
+	update booking2008
+	set TotalAmount = (select Price  from service2008 where serviceid = (select serviceid from inserted)) + (select totalamount from booking2008 where BookingID = (select BookingID from inserted))
+	where bookingid = (select bookingid from inserted);
+end;
+drop trigger ServicePriceAdd;
+
+insert into BookingService2008 (BookingID, serviceId, ServiceTime) values(17,20,'14:00:00');
+
+
+----------------------------------------------------------------------------------------------
+
+select * from booking2008;
+ 
+insert into booking2008 values(18,5,106,'2025-03-22','2025-03-24',20000);
+
+update booking2008
+set status = 'not active'
+where bookingid = 16;
 
 
